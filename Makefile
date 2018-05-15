@@ -1,4 +1,4 @@
-.PHONY: vars clean all example
+.PHONY: vars clean all
 
 include kompose.mk
 
@@ -38,11 +38,6 @@ $(DATAVOLUMES):
 	mkdir -p $@
 	chmod 777 $@
 	# these volumes store the data for the containers
-
-example: data/examples/docker-compose.yaml
-data/examples/docker-compose.yaml:
-	dir=`dirname $@` && mkdir -p $$dir && cd $$dir && \
-		 wget https://raw.githubusercontent.com/kubernetes/kompose/master/examples/docker-compose.yaml
 
 .PHONY: run build kill logs flush ping
 

@@ -1,4 +1,5 @@
 bin
 data/grafana
 data/prometheus
+data/examples
 .vol
