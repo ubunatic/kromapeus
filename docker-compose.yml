@@ -1,0 +1,57 @@
+version: "2"
+services:
+  http-server:
+    build: .
+    image: py-http-server
+    ports:
+      - "8080:8080"
+    networks:
+      - backend
+    command: python /var/lib/http-server/server.py 8080
+    restart: always
+    volumes:
+      - .vol/app:/var/lib/http-server
+
+  prometheus:
+    ports:
+      - "9090:9090"
+    image: prom/prometheus
+    volumes:
+      - .vol/etc:/etc/prometheus
+      - ./data/prometheus:/prometheus
+    links:
+      - http-server
+    restart: always
+    networks:
+        - backend
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - 3000:3000
+    links:
+      - prometheus
+    environment:
+        GF_SECURITY_ADMIN_PASSWORD: "admin"
+        GF_USERS_ALLOW_SIGN_UP: "false"
+        GF_AUTH_ANONYMOUS_ENABLED: "true"
+        GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+        GF_DASHBOARDS_JSON_ENABLED: "true"
+        GF_DASHBOARDS_JSON_PATH: /opt/grafana
+        GF_SERVER_ROOT_URL: http://localhost:3000/
+        GF_SERVER_ROUTER_LOGGING: "true"
+        GF_LOG_LEVEL: "debug"
+        GF_LOG_MODE: "console file"
+    volumes:
+      - .vol/etc:/opt/grafana
+      - ./data/grafana:/var/lib/grafana
+    restart: always
+    networks:
+        - backend
+
+#volumes:
+#  prometheus_data: {}
+#  grafana_data: {}
+
+networks:
+  backend:
