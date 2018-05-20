@@ -5,13 +5,11 @@ include kompose.mk
 COMPOSE_PREFIX = $(shell basename $(CURDIR))
 DOCKERNAMES = grafana prometheus http-server
 DOCKEREXPR  = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
-DATAVOLUMES = $(addprefix data/, $(DOCKERNAMES))
+SOURCE      = app images
+CONTAINERS  = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
 
-SOURCE     = app etc
-CONTAINERS = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
-
-all: clean .vol run vars
-clean: kill ; rm -rf .vol
+all: clean run
+clean: down
 
 vars:
 	# SOURCE:      $(SOURCE)
@@ -24,18 +22,18 @@ vars:
 	#
 	# Usage
 	# -----
-	# make run   # starts the containers
-	# make kill  # kills the containers
+	# make up    # starts the containers
+	# make down  # kills the containers
 
 .PHONY: up down build kill logs flush ping urls watch
 
 VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT)
 up:   ; $(VARS) docker-compose up -d
-down: ; $(VARS) docker-compose down
+down: ; $(VARS) docker-compose down || $(MAKE) kill
 
-run: up logs
+run: up
 	# test if all services are up
-	sleep 5; $(MAKE) ping urls
+	sleep 5; $(MAKE) vars logs ping urls
 	# Kromapeus stack started!
 
 urls:
@@ -57,5 +55,4 @@ ping:
 	@curl -s http://0.0.0.0:9090 | grep -q graph
 	# OK: all servers reachable!
 
-watch:
-	watch make logs ping
+watch: ; watch make logs ping

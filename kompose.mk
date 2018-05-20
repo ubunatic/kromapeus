@@ -4,21 +4,13 @@ export PATH := $(PATH):$(CURDIR)/bin
 
 MINIKUBE_URL = https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 
-all: bin/minikube kompose
+all: cluster-up
 
 bin/minikube:
 	mkdir -p bin
 	curl -Lo bin/minikube $(MINIKUBE_URL)
 	chmod +x bin/minikube
 	# TODO (uj): let minikube run in docker to avoid sudo
-
-EXAMPLE     = data/examples/docker-compose.yaml
-EXAMPLE_DIR = $(shell dirname $(EXAMPLE))
-example-run:     kompose $(EXAMPLE); cd $(EXAMPLE_DIR) && kompose up
-example: $(EXAMPLE)
-$(EXAMPLE):
-	mkdir -p $(EXAMPLE_DIR) && cd $(EXAMPLE_DIR) && \
-	  wget https://raw.githubusercontent.com/kubernetes/kompose/master/examples/docker-compose.yaml
 
 kompose:
 	which kompose || go get -u github.com/kubernetes/kompose
@@ -51,32 +43,31 @@ cluster-vars:
 
 # Advanced Cluster Management using helm
 # ======================================
-.PHONY: helm docker-auth push
+.PHONY: helm cluster-allow-admin docker-auth push
 # The default cluster is the configured cluster on the current shell.
 # Please use CLUSTER=PROJECT/ZONE/NAME to override.
 REGISTRY = gcr.io
 IMAGES = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,py-http-server grafana prometheus)
 
 helm: bin/helm
-bin/helm: authenticate-helm
+bin/helm:
 	mkdir -p bin
 	curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get > scripts/get_helm.sh
 	chmod +x scripts/get_helm.sh
 	EUID=0 HELM_INSTALL_DIR=bin scripts/get_helm.sh
 
 YES=false
-authenticate-helm:
+cluster-allow-admin:
 	if $(YES); then key=y; else \
-		read -p "Allow helm to adminster cluster using default service account? (y|N)" key; \
+		read -p "Allow pods to adminster cluster using default service account? (y|N)" key; \
 	fi; \
 	if test "$$key" = "y"; then \
 		kubectl create clusterrolebinding add-on-cluster-admin \
 			--clusterrole=cluster-admin --serviceaccount=kube-system:default; \
 	fi || true
 
-# recreate all chart from compose file
-chart:
-	_REG=$(REGISTRY) _PRJ=$(PROJECT) kompose convert -c -o chart
+# recreate all chart files from compose file
+chart: ; _REG=$(REGISTRY) _PRJ=$(PROJECT) kompose convert -c -o chart
 
 docker-auth: ; gcloud auth configure-docker
 
@@ -86,8 +77,8 @@ push: $(PUSH_TARGETS)
 $(PUSH_TARGETS): push-%: docker-auth ; docker push $*
 
 # upgrade images, chart, and deployment
-HELM_ARGS =
 RECREATE_ARGS =
+HELM_ARGS =
 HELM      = bin/helm
 NAMESPACE = default
 
@@ -98,8 +89,9 @@ helm-upgrade: ; $(HELM) upgrade kromapeus chart -i --wait --force \
 	--namespace $(NAMESPACE) $(HELM_ARGS) $(RECREATE_ARGS)
 
 helm-clean: helm-delete ; rm -rf bin/helm scripts/get_helm.sh chart
-helm-init: authenticate-helm; $(HELM) init --upgrade
 helm-purge: helm-delete ; kubectl delete deployment tiller-deploy --purge 2> /dev/null || true
+helm-init: cluster-allow-admin
+	$(HELM) init --upgrade; 
 
 upgrade: build push chart helm helm-upgrade
 
@@ -118,8 +110,8 @@ cluster-forwards:
 	$(MAKE) cluster-forward SERVICE=http-server PORTS=8081:8080 & \
 	wait'
 
-ZONE=us-central1-a  # used only for cluster creation
-cluster-up:
+ZONE=us-central1-a  # used only for cluster creation/deletion
+cluster-1-up:
 	gcloud container clusters create cluster-1 --num-nodes=3 \
 		--project $(PROJECT) --zone=$(ZONE) \
 		--cluster-version 1.9.7-gke.0 \
@@ -131,14 +123,12 @@ cluster-up:
 		--no-enable-cloud-monitoring \
 		--no-enable-cloud-logging \
 		--addons NetworkPolicy
-	$(MAKE) helm cluster-creds authenticate-helm chart YES=true
-	$(HELM) init --upgrade
-	kubectl replace --force -f scripts/limit-range.yaml
-	scripts/fix-limits.sh
-	$(MAKE) cluster-scale SIZE=1
-	$(MAKE) helm-upgrade
 
-cluster-down:
+cluster-ensure: ; test -n $(CLUSTER) || $(MAKE) cluster-1-up
+
+cluster:	cluster-ensure cluster-creds cluster-allow-admin cluster-fix helm helm-init chart helm-upgrade
+
+cluster-1-down:
 	gcloud container clusters delete cluster-1 --project $(PROJECT) --zone=$(ZONE) || true
 
-
+cluster-fix: ; scripts/fix-limits.sh
