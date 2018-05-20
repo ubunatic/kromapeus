@@ -26,21 +26,21 @@ services:
         GF_SECURITY_ADMIN_PASSWORD: "admin"
         GF_USERS_ALLOW_SIGN_UP: "false"
         GF_AUTH_ANONYMOUS_ENABLED: "true"
-        GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+        GF_AUTH_ANONYMOUS_ORG_ROLE: "Editor"
         GF_DASHBOARDS_JSON_ENABLED: "true"
-        GF_DASHBOARDS_JSON_PATH: /opt/grafana
-        GF_SERVER_ROOT_URL: http://localhost:3000/
+        GF_DASHBOARDS_JSON_PATH: /var/lib/grafana
+        GF_SERVER_ROOT_URL: http://grafana:3000/
         GF_SERVER_ROUTER_LOGGING: "true"
         GF_LOG_LEVEL: "debug"
         GF_LOG_MODE: "console file"
     restart:  always
     networks: [ backend ]
-    volumes:
-       - grafana_data:/opt/grafana
+    # volumes:
+    #   - grafana_data:/opt/grafana
 
-volumes:
+volumes: {}
   # prometheus_data: {}  # TODO: fix k8s permission issue
-  grafana_data: {}
+  # grafana_data: {}
 
 networks:
   backend:

@@ -15,7 +15,6 @@
 "editable": true,
 "gnetId": null,
 "graphTooltip": 0,
-"id": 1,
 "links": [],
 "panels": [
   {
@@ -55,7 +54,8 @@
 	 "steppedLine": false,
 	 "targets": [
 		{
-		  "expr": "increase(request_processing_seconds_count[5m])",
+		  "$$hashKey": "object:419",
+		  "expr": "increase(request_processing_seconds_count[1m])",
 		  "format": "time_series",
 		  "intervalFactor": 1,
 		  "legendFormat": "{{ instance }}",
@@ -139,7 +139,8 @@
 	 "steppedLine": false,
 	 "targets": [
 		{
-		  "expr": "increase(request_processing_seconds_sum[5m])",
+		  "$$hashKey": "object:473",
+		  "expr": "increase(request_processing_seconds_sum[1m])",
 		  "format": "time_series",
 		  "intervalFactor": 1,
 		  "legendFormat": "{{ instance }}",
@@ -223,6 +224,7 @@
 	 "steppedLine": false,
 	 "targets": [
 		{
+		  "$$hashKey": "object:527",
 		  "expr": "increase(process_cpu_seconds_total[1m])",
 		  "format": "time_series",
 		  "interval": "",
@@ -310,5 +312,5 @@
 "timezone": "",
 "title": "Nodes",
 "uid": "sjqQTf7iz",
-"version": 6
+"version": 1
 }

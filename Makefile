@@ -19,7 +19,6 @@ vars:
 	# DOCKERNAMES: $(DOCKERNAMES)
 	# DOCKEREXPR:  $(DOCKEREXPR)
 	# CONTAINERS:  $(CONTAINERS)
-	# DATAVOLUMES: $(DATAVOLUMES)
 	#
 	# PATH:        $(PATH)
 	#
@@ -28,34 +27,35 @@ vars:
 	# make run   # starts the containers
 	# make kill  # kills the containers
 
-.vol: $(SOURCE);
-	# creating temporary script and config volumes...
-	mkdir -p $@
-	rsync -a $(SOURCE) $@
-	# these are safe to remove after the docker stack has stopped
+.PHONY: up down build kill logs flush ping urls watch
 
-$(DATAVOLUMES):
-	# creating persitent data volumes...
-	mkdir -p $@
-	chmod 777 $@
-	# these volumes store the data for the containers
+VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT)
+up:   ; $(VARS) docker-compose up -d
+down: ; $(VARS) docker-compose down
 
-.PHONY: run build kill logs flush ping
+run: up logs
+	# test if all services are up
+	sleep 5; $(MAKE) ping urls
+	# Kromapeus stack started!
 
-run:
-	docker-compose up -d
+urls:
+	# Grafana:    http://0.0.0.0:3000
+	# Prometheus: http://0.0.0.0:9090
+	# App:        http://0.0.0.0:8080
 
 SOURCES = docker-compose.yml images Dockerfile app
-build: $(SOURCES); _REG=$(REGISTRY) _PRJ=$(PROJECT) docker-compose build
+build: $(SOURCES); $(VARS) docker-compose build
 kill:  ; test -z "$(CONTAINERS)" || docker rm -f $(CONTAINERS)
-logs:  ; @$(patsubst %,echo; docker logs % --tail 10;,$(CONTAINERS))
-flush: ; rm -rf $(DATAVOLUMES)
+logs:  ; @$(patsubst %,echo; docker logs % --tail 7;,$(CONTAINERS))
 
 ping:
-	# ping http-server...
+	# ping http-server: http://0.0.0.0:8080 ...
 	@curl -s http://0.0.0.0:8080 | grep -q process_cpu
-	# ping grafana...
+	# ping grafana:     http://0.0.0.0:3000 ...
 	@curl -s http://0.0.0.0:3000 2> /dev/null | grep -q title
-	# ping prometheus...
+	# ping prometheus:  http://0.0.0.0:9090 ...
 	@curl -s http://0.0.0.0:9090 | grep -q graph
 	# OK: all servers reachable!
+
+watch:
+	watch make logs ping

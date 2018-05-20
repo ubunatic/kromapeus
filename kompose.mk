@@ -43,16 +43,11 @@ cluster-creds:
 cluster-scale:
 	scripts/cluster scale --pool $(POOL) --size $(SIZE)
 
-# reduce the limits of new pods thus we can run even on single node cluster
-cluster-defaults:
-	kubectl replace --force -f scripts/limit-range.yaml --namespace default
-
 cluster-vars:
 	# CLUSTER:  $(CLUSTER)
 	# POOL:     $(POOL)
 	# IMAGES:   $(IMAGES)
 	# SIZE:     $(SIZE)
-
 
 # Advanced Cluster Management using helm
 # ======================================
@@ -69,10 +64,15 @@ bin/helm: authenticate-helm
 	chmod +x scripts/get_helm.sh
 	EUID=0 HELM_INSTALL_DIR=bin scripts/get_helm.sh
 
+YES=false
 authenticate-helm:
-	read -p "allow helm to adminster cluster using default service account? (y|N)" key; \
-		test "$$key" != "y" || kubectl create clusterrolebinding add-on-cluster-admin \
-		--clusterrole=cluster-admin --serviceaccount=kube-system:default
+	if $(YES); then key=y; else \
+		read -p "Allow helm to adminster cluster using default service account? (y|N)" key; \
+	fi; \
+	if test "$$key" = "y"; then \
+		kubectl create clusterrolebinding add-on-cluster-admin \
+			--clusterrole=cluster-admin --serviceaccount=kube-system:default; \
+	fi || true
 
 # recreate all chart from compose file
 chart:
@@ -86,23 +86,59 @@ push: $(PUSH_TARGETS)
 $(PUSH_TARGETS): push-%: docker-auth ; docker push $*
 
 # upgrade images, chart, and deployment
-upgrade: build push chart
-	bin/helm version  # run make helm if helm is not installed
+HELM_ARGS =
+RECREATE_ARGS =
+HELM      = bin/helm
+NAMESPACE = default
+
+helm-delete: ; $(HELM) delete kromapeus --purge $(HELM_ARGS) || true
+helm-recreate: RECREATE_ARGS = --recreate-pods --reset-values
+helm-recreate: helm-upgrade
+helm-upgrade: ; $(HELM) upgrade kromapeus chart -i --wait --force \
+	--namespace $(NAMESPACE) $(HELM_ARGS) $(RECREATE_ARGS)
+
+helm-clean: helm-delete ; rm -rf bin/helm scripts/get_helm.sh chart
+helm-init: authenticate-helm; $(HELM) init --upgrade
+helm-purge: helm-delete ; kubectl delete deployment tiller-deploy --purge 2> /dev/null || true
+
+upgrade: build push chart helm helm-upgrade
 
 POD = $(shell kubectl get pod --selector="io.kompose.service=$(SERVICE)" -o jsonpath='{.items[0].metadata.name}')
-SERVICE = prometheus
-PORTS = 8081:9090
+SERVICE = grafana
+PORTS = 3001:3000
 cluster-forward:
 	@echo creating '$(SERVICE)' service forward from http://0.0.0.0:$(subst :, to ,$(PORTS)) > /dev/stderr
 	kubectl port-forward $(POD) $(PORTS)
 
 cluster-forwards:
 	bash -i -o errexit -c ' \
+	trap "jobs -p | xargs kill" INT TERM EXIT; \
 	$(MAKE) cluster-forward SERVICE=prometheus  PORTS=9091:9090 & \
 	$(MAKE) cluster-forward SERVICE=grafana     PORTS=3001:3000 & \
 	$(MAKE) cluster-forward SERVICE=http-server PORTS=8081:8080 & \
 	wait'
 
-helm-clean:
-	rm -rf bin/helm scripts/get_helm.sh chart
+ZONE=us-central1-a  # used only for cluster creation
+cluster-up:
+	gcloud container clusters create cluster-1 --num-nodes=3 \
+		--project $(PROJECT) --zone=$(ZONE) \
+		--cluster-version 1.9.7-gke.0 \
+		--node-version 1.9.7-gke.0 \
+		--machine-type f1-micro \
+		--no-enable-autorepair \
+		--no-enable-autoscaling \
+		--no-enable-autoupgrade \
+		--no-enable-cloud-monitoring \
+		--no-enable-cloud-logging \
+		--addons NetworkPolicy
+	$(MAKE) helm cluster-creds authenticate-helm chart YES=true
+	$(HELM) init --upgrade
+	kubectl replace --force -f scripts/limit-range.yaml
+	scripts/fix-limits.sh
+	$(MAKE) cluster-scale SIZE=1
+	$(MAKE) helm-upgrade
+
+cluster-down:
+	gcloud container clusters delete cluster-1 --project $(PROJECT) --zone=$(ZONE) || true
+
 
