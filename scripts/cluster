@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+import sys, json, argparse, logging, re
+from subprocess import check_output
+from collections import namedtuple
+
+class Result(namedtuple('Result','data, text')):
+    def json(r, **json_args): return json.dumps(r.data, **json_args)
+
+log = logging.getLogger(__name__)
+
+BASE_CMD = 'gcloud container {resource} {command} {pos_args} --format={format} {options}'
+
+def call(command, resource, *args, format='json', dry=False, first='ignored', extra_args=(), **kwargs):
+    options  = ' '.join('--{}={}'.format(k,v) for k,v in kwargs.items())
+    params = dict(command=command,
+                  format=format,
+                  pos_args=' '.join(args),
+                  options=options,
+                  resource=resource)
+
+    if dry: base = 'echo ' + BASE_CMD
+    else:   base = BASE_CMD
+
+    call_args = [a for a in base.format(**params).split(' ')
+                 if a.strip() != '']
+    log.info('calling: %s', ' '.join(call_args))
+    out = check_output(call_args)
+    res = bytes(out).decode('utf-8').strip()
+    if format == 'json':
+        if dry: res = [res]
+        else:   res = json.loads(out)
+    return res
+
+ls_expr = {
+    'clusters':   re.compile(r'^https://.*/projects/([^/]+)/zones/([^/]+)/clusters/([^/]+)$'),
+    'node-pools': re.compile(r'^https://.*/projects/([^/]+)/zones/([^/]+)/clusters/([^/]+)/nodePools/([^/]+)$')
+}
+
+def ls_resource(resource, first=False, **kwargs):
+    data = []
+    for c in call('list', resource, **kwargs):
+        try: uri = c['selfLink']
+        except KeyError: continue
+        m = re.match(ls_expr[resource], uri)
+        if m is None: log.error('invalid resource uri: %s', uri)
+        else:         data.append(Result(c, '/'.join(m.groups())))
+    return data
+
+def ls_clusters(*args, **kwargs): return ls_resource('clusters', *args, **kwargs)
+
+def ls_pools(cluster, first=True, **kwargs):
+    if cluster is None: cluster = ls_clusters(first=first, **kwargs)[0].text
+    project, zone, cluster = cluster.split('/')
+    ls_kwargs = {**kwargs, **dict(project=project, zone=zone, cluster=cluster)}
+    return ls_resource('node-pools', **ls_kwargs)
+
+def ls(resource, *args, cluster=None, **kwargs):
+    if   resource == 'clusters':   return ls_clusters(*args, **kwargs)
+    elif resource == 'node-pools': return ls_pools(cluster, *args, **kwargs)
+    else:                          return ls_resource(resource, *args, **kwargs)
+
+def creds(cluster, first=True, **kwargs):
+    if cluster is None: cluster = ls_clusters(first=first, **kwargs)[0].text
+    project, zone, name = cluster.split('/')
+    args = [name, '--zone', zone, '--project', project]
+    log.info('creds: %s, %s', args, kwargs)
+    return Result(None, call('get-credentials', 'clusters', *args, **kwargs))
+
+def resize(cluster, pool, size, first=True, **kwargs):
+    if pool is None:
+        pool = ls_pools(cluster, first=first, **kwargs)[0].text
+
+    project, zone, cluster, pool = pool.split('/')
+    args = [cluster, '--project', project, '--zone', zone, '--node-pool', pool, '--size', str(size)]
+    return Result(None, call('resize', 'clusters', *args, **kwargs))
+
+def main(argv=None):
+    global log; log = logging.getLogger('cluster')
+    logging.basicConfig(level=logging.INFO)
+    p = argparse.ArgumentParser(); o = p.add_argument
+    o('command',   help='gcloud container clusters COMMAND to run', default='list', nargs='?')
+    o('--resource',help='type of the resource (default: %(default)s)', default='clusters')
+    o('--dry',     help='echo command instead of running it', action='store_true')
+    o('--first',   help='when listing clusters, only show first', action='store_true')
+    o('--json',    help='output raw json instead of parsed results', action='store_true')
+    o('--cluster', help='PROJECT/ZONE/CLUSTER to use')
+    o('--pool',    help='NAME of the node pool to scale')
+    o('--size',    help='SIZE of the node pool', type=int)
+    args, other = p.parse_known_args(argv)
+
+    log.info('%s\n%s', args, other)
+
+    LIST = ('list', 'ls')
+    CRED = ('get-credentials', 'creds')
+    SCALE = ('scale', 'resize')
+
+    common = dict(extra_args=tuple(other),
+                  dry=args.dry,
+                  first=args.first)
+
+    if   args.command in LIST:  data = ls(args.resource, cluster=args.cluster, **common)
+    elif args.command in CRED:  data = creds(args.cluster, **common)
+    elif args.command in SCALE: data = resize(args.cluster, args.pool, args.size, **common)
+    else:                       data = call(args.command, **common)
+
+    if type(data) is not list: data = [data]
+    for res in data:
+        if args.json: print(res.json())
+        else:         print(res.text)
+
+if __name__ == "__main__": sys.exit(main())

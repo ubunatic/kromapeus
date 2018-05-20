@@ -2,35 +2,26 @@ version: "2"
 services:
   http-server:
     build: .
-    image: py-http-server
-    ports:
-      - "8080:8080"
-    networks:
-      - backend
-    command: python /var/lib/http-server/server.py 8080
-    restart: always
-    volumes:
-      - .vol/app:/var/lib/http-server
+    image: ${_REG}/${_PRJ}/py-http-server:v0.0.1
+    ports: [ "8080:8080" ]
+    networks: [ backend ]
+    restart:  always
 
   prometheus:
-    ports:
-      - "9090:9090"
-    image: prom/prometheus
-    volumes:
-      - .vol/etc:/etc/prometheus
-      - ./data/prometheus:/prometheus
-    links:
-      - http-server
-    restart: always
-    networks:
-        - backend
+    build: images/prometheus
+    image: ${_REG}/${_PRJ}/prometheus:v2.2.1
+    ports: [ "9090:9090" ]
+    links: [ "http-server" ]
+    restart:  always
+    networks: [ backend ]
+    # volumes:
+    #   - prometheus_data:/prometheus
 
   grafana:
-    image: grafana/grafana:latest
-    ports:
-      - 3000:3000
-    links:
-      - prometheus
+    build: images/grafana
+    image: ${_REG}/${_PRJ}/grafana:5.1.3
+    ports: [ "3000:3000" ]
+    links: [ "prometheus" ]
     environment:
         GF_SECURITY_ADMIN_PASSWORD: "admin"
         GF_USERS_ALLOW_SIGN_UP: "false"
@@ -42,16 +33,14 @@ services:
         GF_SERVER_ROUTER_LOGGING: "true"
         GF_LOG_LEVEL: "debug"
         GF_LOG_MODE: "console file"
+    restart:  always
+    networks: [ backend ]
     volumes:
-      - .vol/etc:/opt/grafana
-      - ./data/grafana:/var/lib/grafana
-    restart: always
-    networks:
-        - backend
+       - grafana_data:/opt/grafana
 
-#volumes:
-#  prometheus_data: {}
-#  grafana_data: {}
+volumes:
+  # prometheus_data: {}  # TODO: fix k8s permission issue
+  grafana_data: {}
 
 networks:
   backend:

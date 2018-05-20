@@ -109,3 +109,5 @@ data/grafana
 data/prometheus
 data/examples
 .vol
+scripts/get_helm.sh
+chart

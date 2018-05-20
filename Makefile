@@ -2,8 +2,9 @@
 
 include kompose.mk
 
+COMPOSE_PREFIX = $(shell basename $(CURDIR))
 DOCKERNAMES = grafana prometheus http-server
-DOCKEREXPR  = $(patsubst %,-e 'compose_%',$(DOCKERNAMES))
+DOCKEREXPR  = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
 DATAVOLUMES = $(addprefix data/, $(DOCKERNAMES))
 
 SOURCE     = app etc
@@ -41,10 +42,11 @@ $(DATAVOLUMES):
 
 .PHONY: run build kill logs flush ping
 
-run: .vol $(DATAVOLUMES)
+run:
 	docker-compose up -d
 
-build: ; docker-compose build
+SOURCES = docker-compose.yml images Dockerfile app
+build: $(SOURCES); _REG=$(REGISTRY) _PRJ=$(PROJECT) docker-compose build
 kill:  ; test -z "$(CONTAINERS)" || docker rm -f $(CONTAINERS)
 logs:  ; @$(patsubst %,echo; docker logs % --tail 10;,$(CONTAINERS))
 flush: ; rm -rf $(DATAVOLUMES)
