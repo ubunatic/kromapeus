@@ -1,4 +1,4 @@
-.PHONY: vars clean all
+.PHONY: vars clean all kompose
 
 include kompose.mk
 
@@ -7,6 +7,8 @@ DOCKERNAMES = grafana prometheus http-server
 DOCKEREXPR  = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
 SOURCE      = app images
 CONTAINERS  = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
+# vars used in docker-compose.yml
+VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT)
 
 all: clean run
 clean: down
@@ -19,27 +21,28 @@ vars:
 	# CONTAINERS:  $(CONTAINERS)
 	#
 	# PATH:        $(PATH)
+	# VARS:        $(VARS)
 	#
 	# Usage
 	# -----
 	# make up    # starts the containers
 	# make down  # kills the containers
 
-.PHONY: up down build kill logs flush ping urls watch
+kompose: ; which kompose || go get -u github.com/kubernetes/kompose
 
-VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT)
-up:   ; $(VARS) docker-compose up -d
-down: ; $(VARS) docker-compose down || $(MAKE) kill
 
+# Docker Compose and K8S Kompose Tasks
+# ====================================
+.PHONY: up down build kill logs flush ping watch
+
+
+chart: ; rm -rf chart; $(VARS) kompose convert -c -o chart
+up:    ; $(VARS) docker-compose up -d
+down:  ; $(VARS) docker-compose down || $(MAKE) kill
 run: up
 	# test if all services are up
-	sleep 5; $(MAKE) vars logs ping urls
+	sleep 5; $(MAKE) vars logs ping
 	# Kromapeus stack started!
-
-urls:
-	# Grafana:    http://0.0.0.0:3000
-	# Prometheus: http://0.0.0.0:9090
-	# App:        http://0.0.0.0:8080
 
 SOURCES = docker-compose.yml images Dockerfile app
 build: $(SOURCES); $(VARS) docker-compose build
@@ -56,3 +59,6 @@ ping:
 	# OK: all servers reachable!
 
 watch: ; watch make logs ping
+
+
+
