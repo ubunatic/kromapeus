@@ -1,47 +1,25 @@
 version: "2"
 services:
-  app:
-    build: .
-    hostname: ${_APP}
-    image: ${_REG}/${_PRJ}/${_APP}:v0.0.1
-    ports: [ "8080:8080" ]
-    networks: [ backend ]
-    restart:  always
+  http-server:
+    extends:
+      file: images/common.yml
+      service: app
+    command: python /app/server.py 8080
+
+  http-server-extra:
+    extends:
+      file: images/common.yml
+      service: app
+    ports: [ "8080:8081" ]
+    command: python /app/server.py 8080
 
   prometheus:
-    build: images/prometheus
-    image: ${_REG}/${_PRJ}/prometheus:v2.2.1
-    ports: [ "9090:9090" ]
-    links: [ app ]
-    restart:  always
-    networks: [ backend ]
-    # volumes:
-    #   - prometheus_data:/prometheus
+    extends:
+      file: images/common.yml
+      service: prometheus
 
   grafana:
-    build: images/grafana
-    image: ${_REG}/${_PRJ}/grafana:5.1.3
-    ports: [ "3000:3000" ]
-    links: [ "prometheus" ]
-    environment:
-        GF_SECURITY_ADMIN_PASSWORD: "admin"
-        GF_USERS_ALLOW_SIGN_UP: "false"
-        GF_AUTH_ANONYMOUS_ENABLED: "true"
-        GF_AUTH_ANONYMOUS_ORG_ROLE: "Editor"
-        GF_DASHBOARDS_JSON_ENABLED: "true"
-        GF_DASHBOARDS_JSON_PATH: /var/lib/grafana
-        GF_SERVER_ROOT_URL: http://grafana:3000/
-        GF_SERVER_ROUTER_LOGGING: "true"
-        GF_LOG_LEVEL: "debug"
-        GF_LOG_MODE: "console file"
-    restart:  always
-    networks: [ backend ]
-    # volumes:
-    #   - grafana_data:/opt/grafana
+    extends:
+      file: images/common.yml
+      service: grafana
 
-volumes: {}
-  # prometheus_data: {}  # TODO: fix k8s permission issue
-  # grafana_data: {}
-
-networks:
-  backend:

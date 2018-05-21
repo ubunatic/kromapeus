@@ -3,20 +3,21 @@
 include kompose.mk
 
 APP            = http-server
-DOCKERNAMES    = grafana prometheus $(APP)
+APPS           = http-server http-server-extra
+DOCKERNAMES    = grafana prometheus $(APPS)
 COMPOSE_PREFIX = $(shell basename $(CURDIR))
 DOCKEREXPR     = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
-PROM_YML       = images/prometheus/prometheus.yml
-SOURCE         = app images $(PROM_YML).j2 Makefile
+SOURCE         = app images $(PROM_YML).j2 Makefile docker-compose.yml
 CONTAINERS     = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
 # vars used in docker-compose.yml
 VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT) _APP=${APP}
+COMPOSE = $(VARS) docker-compose
 
 all: clean j2 run
 clean: down
 	rm -f $(PROM_YML)
 
-j2: $(PROM_YML)
+j2: j2-prom ; # put extra templating code here
 
 vars:
 	# SOURCE:      $(SOURCE)
@@ -38,16 +39,14 @@ vars:
 # ====================================
 .PHONY: up down build kill logs flush ping watch
 
-
-up:    ; $(VARS) docker-compose up -d
-down:  ; $(VARS) docker-compose down || $(MAKE) kill
+up:    ; $(COMPOSE) up -d
+down:  ; $(COMPOSE) down || $(MAKE) kill
 run: up
 	# test if all services are up
 	sleep 5; $(MAKE) vars logs ping
 	# Kromapeus stack started!
 
-SOURCES = docker-compose.yml images Dockerfile app
-build: $(SOURCES) j2; $(VARS) docker-compose build
+build: $(SOURCES) j2; $(COMPOSE) build
 kill:  ; test -z "$(CONTAINERS)" || docker rm -f $(CONTAINERS)
 logs:  ; @$(patsubst %,echo; docker logs % --tail 7;,$(CONTAINERS))
 
@@ -62,5 +61,4 @@ ping:
 
 watch: ; watch make logs ping
 
-$(PROM_YML): ; scripts/jinja.py -f $@.j2 TARGETS='"${APP}:8080"' > $@
 

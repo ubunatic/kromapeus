@@ -8,7 +8,9 @@ clean: charts-clean
 kompose: ; which kompose || go get -u github.com/kubernetes/kompose
 chart: ; $(VARS) kompose convert -c -o chart
 
-CHARTS = $(addprefix charts/,app prometheus grafana)
+CHARTNAMES = $(APPS) prometheus grafana
+CHARTS     = $(addprefix charts/,$(APPS) prometheus grafana)
+
 charts: chart $(CHARTS)
 $(CHARTS): charts/%:
 	# base:  $@
@@ -18,6 +20,19 @@ $(CHARTS): charts/%:
 	cp chart/templates/$*-*.yaml $@/templates
 
 charts-clean: ; rm -rf chart charts
+
+# Templating
+# ==========
+.PHONY: j2-prom
+
+PROM_YML = images/prometheus/prometheus.yml
+j2-prom: $(PROM_YML)
+
+PROM_TARGETS    = $(patsubst %,"%:8080",$(APPS))
+PROM_TARGETS_J2 = $(shell echo '$(PROM_TARGETS)' | sed 's/ /, /g')
+$(PROM_YML):
+	scripts/jinja.py -f $@.j2 TARGETS='$(PROM_TARGETS_J2)' > $@
+	grep targets -A 1 -B 1 $@
 
 # Basic Cluster Management using gcloud command
 # =============================================
@@ -67,14 +82,14 @@ $(PUSH_TARGETS): push-%: docker-auth ; docker push $*
 
 # upgrade images, chart, and deployment
 RECREATE_ARGS =
-HELM_ARGS =
-HELM      = bin/helm
-NAMESPACE = default
+HELM_ARGS  =
+HELM       = bin/helm
+NAMESPACE  = default
+CHART      = $(APP)
 
 .PHONY: helm-delete helm-recreate helm-upgrade helm-clean helm-purge helm-init upgrade
-helm-delete:  ; $(HELM) delete kromapeus --purge $(HELM_ARGS) || true
-helm-upgrade: ; $(HELM) upgrade kromapeus chart -i --wait --force \
-	--namespace $(NAMESPACE) $(HELM_ARGS) $(RECREATE_ARGS)
+helm-delete: ; $(HELM) delete $(CHART) --purge $(HELM_ARGS) || true
+helm-upgrade: ; $(HELM) upgrade $(CHART) charts/$(CHART) -i --wait --namespace $(NAMESPACE) $(HELM_ARGS) $(RECREATE_ARGS)
 helm-recreate: RECREATE_ARGS = --recreate-pods --reset-values
 helm-recreate: helm-upgrade
 
@@ -84,8 +99,13 @@ helm-init: helm cluster-allow-admin;
 	$(HELM) init --upgrade
 	while ! $(HELM) list; do sleep 10; done  # wait for tiller pod
 
-upgrade: build push chart helm helm-upgrade
+helm-all: ; for c in $(CHARTNAMES); do $(MAKE) helm-$(HELM_TASK) CHART=$$c; done
+upgrade-all: HELM_TASK=upgrade
+upgrade-all: helm-all
+recreate-all: HELM_TASK=upgrade
+recreate-all: helm-all
 
+upgrade: build push charts helm upgrade-all
 
 # Cluster Creation, Deletion, and Forwarding
 # ==========================================
@@ -104,7 +124,7 @@ cluster-forwards:
 	trap "jobs -p | xargs kill" INT TERM EXIT; \
 	$(MAKE) cluster-forward SERVICE=prometheus  PORTS=9091:9090 & \
 	$(MAKE) cluster-forward SERVICE=grafana     PORTS=3001:3000 & \
-	$(MAKE) cluster-forward SERVICE=http-server PORTS=8081:8080 & \
+	$(MAKE) cluster-forward SERVICE=$(APP)      PORTS=8081:8080 & \
 	wait'
 
 ZONE=us-central1-a  # used only for cluster creation/deletion
