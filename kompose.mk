@@ -1,11 +1,23 @@
-.PHONY: kompose
+.PHONY: kompose charts-clean
 
 # Kompose setup
 # =============
 export PATH := $(PATH):$(CURDIR)/bin
-kompose: ; which kompose || go get -u github.com/kubernetes/kompose
-chart: ; rm -rf chart; $(VARS) kompose convert -c -o chart
 
+clean: charts-clean
+kompose: ; which kompose || go get -u github.com/kubernetes/kompose
+chart: ; $(VARS) kompose convert -c -o chart
+
+CHARTS = $(addprefix charts/,app prometheus grafana)
+charts: chart $(CHARTS)
+$(CHARTS): charts/%:
+	# base:  $@
+	# match: $*
+	mkdir -p $@/templates
+	cp chart/Chart.yaml $@
+	cp chart/templates/$*-*.yaml $@/templates
+
+charts-clean: ; rm -rf chart charts
 
 # Basic Cluster Management using gcloud command
 # =============================================
