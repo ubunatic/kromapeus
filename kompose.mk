@@ -63,7 +63,9 @@ helm-recreate: helm-upgrade
 
 helm-clean: helm-delete ; rm -rf bin/helm scripts/get_helm.sh chart
 helm-purge: helm-clean  ; kubectl delete deployment tiller-deploy --purge 2> /dev/null || true
-helm-init: cluster-allow-admin; $(HELM) init --upgrade
+helm-init: helm cluster-allow-admin;
+	$(HELM) init --upgrade
+	while ! $(HELM) list; do sleep 10; done  # wait for tiller pod
 
 upgrade: build push chart helm helm-upgrade
 

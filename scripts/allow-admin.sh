@@ -21,6 +21,8 @@ fi
 
 if $allow
 then kubectl create clusterrolebinding add-on-cluster-admin \
-	--clusterrole=cluster-admin --serviceaccount=kube-system:default
-else echo "admin-role setup skipped" 1>&2
+	--clusterrole=cluster-admin --serviceaccount=kube-system:default &&
+	echo "OK admin-role setup"
+	echo "WARN ignoring kubectl create clusterrolebinding error"
+else echo "OK admin-role setup skipped" 1>&2
 fi
