@@ -37,7 +37,7 @@ cluster-vars:
 # Advanced Cluster Management using Helm
 # ======================================
 .PHONY: helm cluster-allow-admin docker-auth push $(PUSH_TARGETS)
-IMAGES = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,py-http-server grafana prometheus)
+IMAGES = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP) grafana prometheus)
 
 helm: bin/helm
 bin/helm: ; scripts/helm-user-install.sh $(CURDIR)/bin

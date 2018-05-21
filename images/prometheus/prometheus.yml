@@ -1,0 +1,12 @@
+global:
+   scrape_interval:     5s # default: 15s
+   evaluation_interval: 5s # default: 15s
+   # scrape_timeout: # default (10s).
+
+# scrape configurations for each endpoint to scrape
+scrape_configs:
+   - job_name: 'prometheus'
+     static_configs:
+        - targets: [ "http-server:8080" ]
+
+# vim: ft=yaml

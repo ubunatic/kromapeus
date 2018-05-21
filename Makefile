@@ -50,7 +50,7 @@ run: up
 	# Kromapeus stack started!
 
 SOURCES = docker-compose.yml images Dockerfile app
-build: $(SOURCES); $(VARS) docker-compose build
+build: $(SOURCES) j2; $(VARS) docker-compose build
 kill:  ; test -z "$(CONTAINERS)" || docker rm -f $(CONTAINERS)
 logs:  ; @$(patsubst %,echo; docker logs % --tail 7;,$(CONTAINERS))
 
