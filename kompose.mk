@@ -1,16 +1,15 @@
-.PHONY: kompose charts-clean
+.PHONY: kompose charts-clean chart-vars
 
 # Kompose setup
 # =============
 export PATH := $(PATH):$(CURDIR)/bin
 
+kompose:          ; which kompose || go get -u github.com/kubernetes/kompose
+chart: chart-vars ; $(VARS) kompose convert -c -o chart
 clean: charts-clean
-kompose: ; which kompose || go get -u github.com/kubernetes/kompose
-chart: ; $(VARS) kompose convert -c -o chart
 
-CHARTNAMES = $(APPS) prometheus grafana
-CHARTS     = $(addprefix charts/,$(APPS) prometheus grafana)
-
+CHARTNAMES = $(SERVICES)
+CHARTS     = $(addprefix charts/,$(CHARTNAMES))
 charts: chart $(CHARTS)
 $(CHARTS): charts/%:
 	# base:  $@
@@ -20,6 +19,13 @@ $(CHARTS): charts/%:
 	cp chart/templates/$*-*.yaml $@/templates
 
 charts-clean: ; rm -rf chart charts
+
+vars: chart-vars
+chart-vars:
+	# CHARTNAMES: $(CHARTNAMES)
+	# CHARTS:     $(CHARTS)
+	# APPS:       $(APPS)
+	# SERVICES:   $(SERVICES)
 
 # Templating
 # ==========
@@ -69,7 +75,8 @@ cluster-vars:
 # Advanced Cluster Management using Helm
 # ======================================
 .PHONY: helm cluster-allow-admin docker-auth push $(PUSH_TARGETS)
-IMAGES = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP) grafana prometheus)
+IMAGES    = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP) grafana prometheus)
+APP_IMAGE = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP))
 
 helm: bin/helm
 bin/helm: ; scripts/helm-user-install.sh $(CURDIR)/bin
@@ -77,8 +84,9 @@ docker-auth: ; gcloud auth configure-docker
 
 # targets for manually pusing images (kompose -c --build local will do this automatically)
 PUSH_TARGETS = $(patsubst %,push-%,$(IMAGES))
-push: $(PUSH_TARGETS)
+push-all: $(PUSH_TARGETS)
 $(PUSH_TARGETS): push-%: docker-auth ; docker push $*
+push: push-$(APP_IMAGE)
 
 # upgrade images, chart, and deployment
 RECREATE_ARGS =

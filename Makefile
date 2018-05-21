@@ -1,17 +1,19 @@
 .PHONY: vars clean all j2
 
-include kompose.mk
+# User vars
+# =========
+APP      = http-server
+APPS     = http-server extra-server
+SERVICES = grafana prometheus $(APPS)
 
-APP            = http-server
-APPS           = http-server http-server-extra
-DOCKERNAMES    = grafana prometheus $(APPS)
 COMPOSE_PREFIX = $(shell basename $(CURDIR))
-DOCKEREXPR     = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
+DOCKEREXPR     = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(SERVICES))
 SOURCE         = app images $(PROM_YML).j2 Makefile docker-compose.yml
 CONTAINERS     = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
 # vars used in docker-compose.yml
-VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT) _APP=${APP}
+VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT) _APP=${APP} _TAG=v0.0.1
 COMPOSE = $(VARS) docker-compose
+
 
 all: clean j2 run
 clean: down
@@ -22,7 +24,8 @@ j2: j2-prom ; # put extra templating code here
 vars:
 	# SOURCE:      $(SOURCE)
 	#
-	# DOCKERNAMES: $(DOCKERNAMES)
+	# SERVICES:    $(SERVICES)
+	# APPS:        $(APPS)
 	# DOCKEREXPR:  $(DOCKEREXPR)
 	# CONTAINERS:  $(CONTAINERS)
 	#
@@ -61,4 +64,5 @@ ping:
 
 watch: ; watch make logs ping
 
-
+# Note: vars for dynamic targets (CHARTS), must be setup before include
+include kompose.mk

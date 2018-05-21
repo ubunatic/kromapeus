@@ -6,7 +6,7 @@ services:
       service: app
     command: python /app/server.py 8080
 
-  http-server-extra:
+  extra-server:
     extends:
       file: images/common.yml
       service: app
@@ -23,3 +23,5 @@ services:
       file: images/common.yml
       service: grafana
 
+networks:
+  backend:
