@@ -1,8 +1,9 @@
 version: "2"
 services:
-  http-server:
+  app:
     build: .
-    image: ${_REG}/${_PRJ}/py-http-server:v0.0.1
+    hostname: ${_APP}
+    image: ${_REG}/${_PRJ}/${_APP}:v0.0.1
     ports: [ "8080:8080" ]
     networks: [ backend ]
     restart:  always
@@ -11,7 +12,7 @@ services:
     build: images/prometheus
     image: ${_REG}/${_PRJ}/prometheus:v2.2.1
     ports: [ "9090:9090" ]
-    links: [ "http-server" ]
+    links: [ app ]
     restart:  always
     networks: [ backend ]
     # volumes:

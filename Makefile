@@ -1,17 +1,22 @@
-.PHONY: vars clean all kompose
+.PHONY: vars clean all kompose j2
 
 include kompose.mk
 
+APP            = http-server
+DOCKERNAMES    = grafana prometheus $(APP)
 COMPOSE_PREFIX = $(shell basename $(CURDIR))
-DOCKERNAMES = grafana prometheus http-server
-DOCKEREXPR  = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
-SOURCE      = app images
-CONTAINERS  = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
+DOCKEREXPR     = $(patsubst %,-e '$(COMPOSE_PREFIX)_%',$(DOCKERNAMES))
+PROM_YML       = images/prometheus/prometheus.yml
+SOURCE         = app images $(PROM_YML).j2 Makefile
+CONTAINERS     = $(shell docker ps --format "{{.Names}}" | grep $(DOCKEREXPR))
 # vars used in docker-compose.yml
-VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT)
+VARS = _REG=$(REGISTRY) _PRJ=$(PROJECT) _APP=${APP}
 
-all: clean run
+all: clean j2 run
 clean: down
+	rm -f $(PROM_YML)
+
+j2: $(PROM_YML)
 
 vars:
 	# SOURCE:      $(SOURCE)
@@ -60,5 +65,5 @@ ping:
 
 watch: ; watch make logs ping
 
-
+$(PROM_YML): ; scripts/jinja.py -f $@.j2 TARGETS='"${APP}:8080"' > $@
 
