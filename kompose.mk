@@ -1,8 +1,11 @@
 .PHONY: kompose
 
-kompose: ; which kompose || go get -u github.com/kubernetes/kompose
-
+# Kompose setup
+# =============
 export PATH := $(PATH):$(CURDIR)/bin
+kompose: ; which kompose || go get -u github.com/kubernetes/kompose
+chart: ; rm -rf chart; $(VARS) kompose convert -c -o chart
+
 
 # Basic Cluster Management using gcloud command
 # =============================================

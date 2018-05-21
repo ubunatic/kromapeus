@@ -39,7 +39,6 @@ vars:
 .PHONY: up down build kill logs flush ping watch
 
 
-chart: ; rm -rf chart; $(VARS) kompose convert -c -o chart
 up:    ; $(VARS) docker-compose up -d
 down:  ; $(VARS) docker-compose down || $(MAKE) kill
 run: up
