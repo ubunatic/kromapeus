@@ -1,4 +1,6 @@
-.PHONY: all kompose example example-run
+.PHONY: kompose
+
+kompose: ; which kompose || go get -u github.com/kubernetes/kompose
 
 export PATH := $(PATH):$(CURDIR)/bin
 

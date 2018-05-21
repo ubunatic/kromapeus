@@ -1,4 +1,4 @@
-.PHONY: vars clean all kompose j2
+.PHONY: vars clean all j2
 
 include kompose.mk
 
@@ -32,8 +32,6 @@ vars:
 	# -----
 	# make up    # starts the containers
 	# make down  # kills the containers
-
-kompose: ; which kompose || go get -u github.com/kubernetes/kompose
 
 
 # Docker Compose and K8S Kompose Tasks
