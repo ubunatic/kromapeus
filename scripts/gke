@@ -44,49 +44,65 @@ def ls_resource(resource, first=False, **kwargs):
         m = re.match(ls_expr[resource], uri)
         if m is None: log.error('invalid resource uri: %s', uri)
         else:         data.append(Result(c, '/'.join(m.groups())))
-    return data
+
+    if len(data) > 0 and first: return data[0]
+    else:                       return data
+
 
 def ls_clusters(*args, **kwargs): return ls_resource('clusters', *args, **kwargs)
 
+
 def ls_pools(cluster, first=True, **kwargs):
-    if cluster is None: cluster = ls_clusters(first=first, **kwargs)[0].text
+    if cluster is None and first:
+        cluster = ls_clusters(first=True, **kwargs).text
+
     project, zone, cluster = cluster.split('/')
     ls_kwargs = {**kwargs, **dict(project=project, zone=zone, cluster=cluster)}
     return ls_resource('node-pools', **ls_kwargs)
 
+
 def ls(resource, *args, cluster=None, **kwargs):
-    if   resource == 'clusters':   return ls_clusters(*args, **kwargs)
-    elif resource == 'node-pools': return ls_pools(cluster, *args, **kwargs)
-    else:                          return ls_resource(resource, *args, **kwargs)
+    if   resource == 'clusters':     return ls_clusters(*args, **kwargs)
+    elif resource.endswith('pools'): return ls_pools(cluster, *args, **kwargs)
+    else:                            return ls_resource(resource, *args, **kwargs)
+
 
 def creds(cluster, first=True, **kwargs):
-    if cluster is None: cluster = ls_clusters(first=first, **kwargs)[0].text
+    if cluster is None and first:
+        cluster = ls_clusters(first=True, **kwargs).text
+
     project, zone, name = cluster.split('/')
     args = [name, '--zone', zone, '--project', project]
     log.info('creds: %s, %s', args, kwargs)
     return Result(None, call('get-credentials', 'clusters', *args, **kwargs))
 
+
 def resize(cluster, pool, size, first=True, **kwargs):
-    if pool is None:
-        pool = ls_pools(cluster, first=first, **kwargs)[0].text
+    if pool is None and first:
+        pool = ls_pools(cluster, first=True, **kwargs).text
 
     project, zone, cluster, pool = pool.split('/')
     args = [cluster, '--project', project, '--zone', zone, '--node-pool', pool, '--size', str(size)]
     return Result(None, call('resize', 'clusters', *args, **kwargs))
 
+
 def main(argv=None):
     global log; log = logging.getLogger('cluster')
-    logging.basicConfig(level=logging.INFO)
     p = argparse.ArgumentParser(); o = p.add_argument
-    o('command',   help='gcloud container clusters COMMAND to run', default='list', nargs='?')
-    o('--resource',help='type of the resource (default: %(default)s)', default='clusters')
-    o('--dry',     help='echo command instead of running it', action='store_true')
-    o('--first',   help='when listing clusters, only show first', action='store_true')
-    o('--json',    help='output raw json instead of parsed results', action='store_true')
-    o('--cluster', help='PROJECT/ZONE/CLUSTER to use')
-    o('--pool',    help='NAME of the node pool to scale')
-    o('--size',    help='SIZE of the node pool', type=int)
+    o('command',       help='gcloud container clusters COMMAND to run')
+    o('resource',      help='type of the resource to list', default='clusters', nargs='?')
+    o('--dry',         help='echo command instead of running it', action='store_true')
+    o('--first', '-1', help='when listing resources, only show first', action='store_true')
+    o('--json',        help='output raw json instead of parsed results', action='store_true')
+    o('--cluster',     help='PROJECT/ZONE/CLUSTER to use')
+    o('--pool',        help='NAME of the node pool to scale')
+    o('--size',        help='SIZE of the node pool', type=int)
+    o('--quiet', '-q', help='less logging', action='store_true')
     args, other = p.parse_known_args(argv)
+
+    if args.quiet: level = logging.WARN
+    else:          level = logging.INFO
+    logging.basicConfig(level=level)
 
     log.info('%s\n%s', args, other)
 
