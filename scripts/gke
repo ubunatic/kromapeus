@@ -57,7 +57,7 @@ def ls_pools(cluster, first=True, **kwargs):
         cluster = ls_clusters(first=True, **kwargs).text
 
     project, zone, cluster = cluster.split('/')
-    ls_kwargs = {**kwargs, **dict(project=project, zone=zone, cluster=cluster)}
+    ls_kwargs = {**kwargs, **dict(project=project, zone=zone, cluster=cluster, first=first)}
     return ls_resource('node-pools', **ls_kwargs)
 
 
