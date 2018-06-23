@@ -9,14 +9,30 @@ persistence:
   size: 1Gi
   accessModes:
   - ReadWriteOnce
-# existingClaim: graf-grafana
+  existingClaim: graf-grafana
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: 'http://prom-prometheus-server.default.svc.cluster.local'
+      access: proxy
+      isDefault: true
 "
+
+PROM="
+pushgateway:
+  enabled: false
+"
+
 here=`dirname $0`
 bin=`readlink -f $here/../bin`
 PATH=$PATH:$bin
 
 first_pod(){ kubectl get pods -l "$@" -o jsonpath='{.items[0].metadata.name}'; }
-upgrade()  { helm upgrade --install "$@"; }
+upgrade()  { helm upgrade --install --wait "$@"; }
+scale()    { kubectl scale deployment --replicas $@; }
 log()      { echo "$@" 1>&2; }
 
 install_helm(){
@@ -30,31 +46,64 @@ install_helm(){
 	done 
 }
 
-forward_ports(){
-	trap 'kill %1 %2 %3' TERM INT
-	kubectl port-forward `first_pod "app=grafana"`                           3000:3000 &
-	kubectl port-forward `first_pod "app=prometheus,component=server"`       9090:9090 &
-	kubectl port-forward `first_pod "app=prometheus,component=alertmanager"` 9093:9093 &
+kfwd(){  # args: selector ports comment
+	kubectl port-forward `first_pod "$1"` $2 | while read line; do
+		if echo "$line" | grep -q "Forwarding"
+		then log "$line ($3)"
+		else log "$line"
+		fi
+	done
+}
 
-	log "waiting for proxies:
-	graf-grafana:            http://localhost:3000
-	prometheus-server:       http://localhost:9090
-	prometheus-alertmanager: http://localhost:9393
-	"
+forward_ports(){  # args: names OR --all
+	test -z "$*" && names="graf" || names="$*"                         # set default
+	case $1 in all|--all|-a) names="graf server alertmanager";;	esac   # override via flag
+	
+	for n in $names; do case $n in
+		graf*)  kfwd "app=grafana"                           3000:3000 "graf-grafana:            http://localhost:3000" &;;
+		serv*)  kfwd "app=prometheus,component=server"       9090:9090 "prometheus-server:       http://localhost:9090" &;;
+		alert*) kfwd "app=prometheus,component=alertmanager" 9093:9093 "prometheus-alertmanager: http://localhost:9393" &;;
+		*)      log "Invalid deployment: $n"; exit 1;;
+	esac; done
+
+	log "Waiting for proxies"
 	wait
 }
 
-prom(){ upgrade prom stable/prometheus --force --wait; }
-graf(){ upgrade graf stable/grafana -f <(echo "$GRAF") --wait --debug; }
+scale_prom(){
+	for name in server kube-state-metrics alertmanager; do
+		scale $1 $2-prometheus-$name&
+	done
+	wait
+}
+
+prom(){
+	scale_prom 0 prom
+	upgrade prom stable/prometheus -f <(echo "$PROM")
+	scale_prom 1 prom
+}
+
+graf(){
+   scale 0 graf-grafana
+	upgrade graf stable/grafana -f <(echo "$GRAF")
+   scale 1 graf-grafana
+}
+
+server(){
+	make charts
+	bin/helm upgrade --install http-server charts/http-server
+}
 
 secret(){ kubectl get secret graf-grafana -o jsonpath='{.data.admin-password}' | base64 --decode; echo; }
 
 while test $# -gt 0; do case $1 in
 	ins*|helm) install_helm;;
-	up*|dep*)  prom; graf;;
+	up*|dep*)  prom; graf; server;;
 	prom*)     prom;;
 	graf*)     graf;;
 	sec*)      secret;;
-	fwd|forw*|proxy) forward_ports;;
-	*)               log "invalid command $action"; exit 1;;
+	serv*)     server;;
+	fwd|forw*|proxy) shift; forward_ports $@;;
+
+	*)               log "Invalid command: $action"; exit 1;;
 esac; shift; done
