@@ -89,15 +89,15 @@ def resize(cluster, pool, size, first=True, **kwargs):
 def main(argv=None):
     global log; log = logging.getLogger('cluster')
     p = argparse.ArgumentParser(); o = p.add_argument
-    o('command',       help='gcloud container clusters COMMAND to run')
-    o('resource',      help='type of the resource to list', default='clusters', nargs='?')
-    o('--dry',         help='echo command instead of running it', action='store_true')
-    o('--first', '-1', help='when listing resources, only show first', action='store_true')
-    o('--json',        help='output raw json instead of parsed results', action='store_true')
-    o('--cluster',     help='PROJECT/ZONE/CLUSTER to use')
-    o('--pool',        help='NAME of the node pool to scale')
-    o('--size',        help='SIZE of the node pool', type=int)
-    o('--quiet', '-q', help='less logging', action='store_true')
+    o('command',         help='gcloud container clusters COMMAND to run')
+    o('resource',        help='type of the resource to list', default='clusters', nargs='?')
+    o('--dry',           help='echo command instead of running it', action='store_true')
+    o('--first',   '-1', help='when getting resources, only return first', action='store_true')
+    o('--json',    '-j', help='output raw json instead of parsed results', action='store_true')
+    o('--cluster', '-c', help='PROJECT/ZONE/CLUSTER to use')
+    o('--pool',    '-p', help='NAME of the node pool to scale')
+    o('--size',    '-n', help='SIZE of the node pool', type=int)
+    o('--quiet',   '-q', help='less logging', action='store_true')
     args, other = p.parse_known_args(argv)
 
     if args.quiet: level = logging.WARN

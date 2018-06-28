@@ -5,7 +5,7 @@ from jinja2 import Template as T
 from random import random
 import argparse, re, sys, os, shutil
 
-expr = re.compile(r'^([^=]*)=(.*)$')
+kv_expr = re.compile(r'^([^=]*)=(.*)$')
 
 def install(prefix): shutil.copy(__file__, os.path.join(prefix,'jinja'))
 
@@ -27,7 +27,7 @@ def jinja(filename, *kvstrings, **substitutions):
         t = sys.stdin.read()
     else:
         with open(filename) as f: t = f.read()
-    d = {re.match(expr, kv).groups() for kv in kvstrings}
+    d = {re.match(kv_expr, kv).groups() for kv in kvstrings}
     d.update(substitutions)
     return T(t).render(d)
 

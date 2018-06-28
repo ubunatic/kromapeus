@@ -37,7 +37,7 @@ j2-prom: $(PROM_YML)
 PROM_TARGETS    = $(patsubst %,"%:8080",$(APPS))
 PROM_TARGETS_J2 = $(shell echo '$(PROM_TARGETS)' | sed 's/ /, /g')
 $(PROM_YML):
-	scripts/jinja.py -f $@.j2 TARGETS='$(PROM_TARGETS_J2)' > $@
+	scripts/jinja -f $@.j2 TARGETS='$(PROM_TARGETS_J2)' > $@
 	grep targets -A 1 -B 1 $@
 
 # Basic Cluster Management using gcloud command
@@ -46,23 +46,23 @@ $(PROM_YML):
 
 # The default cluster is the configured cluster on the current shell.
 # Please use CLUSTER=PROJECT/ZONE/NAME to override.
-CLUSTER  = $(shell scripts/cluster ls --first)
+CLUSTER  = $(shell scripts/gke ls --first)
 PROJECT  = $(shell gcloud config get-value project)
 REGISTRY = gcr.io
-POOL     = $(shell scripts/cluster ls --resource node-pools --cluster $(CLUSTER) --first)
+POOL     = $(shell scripts/gke ls --resource node-pools --cluster $(CLUSTER) --first)
 SIZE     = 3
 
 # get access to the cluster using current google credentials
 cluster-creds:	
-	scripts/cluster creds --cluster $(CLUSTER)
+	scripts/gke creds --cluster $(CLUSTER)
 	kubectl get pods  # test if we can talk to the cluster
 
 ALLOW_ADMIN=false
-cluster-allow-admin: ; scripts/allow-admin.sh $(ALLOW_ADMIN)
+cluster-allow-admin: ; scripts/install-helm admin $(ALLOW_ADMIN)
 
 # resize the cluster, set SIZE=<number> to change the size
 cluster-scale:
-	scripts/cluster scale --pool $(POOL) --size $(SIZE)
+	scripts/gke scale --pool $(POOL) --size $(SIZE)
 
 cluster-vars:
 	# REGISTRY: $(REGISTRY)
@@ -79,7 +79,7 @@ IMAGES    = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP) grafana prometheus)
 APP_IMAGE = $(patsubst %,$(REGISTRY)/$(PROJECT)/%,$(APP))
 
 helm: bin/helm
-bin/helm: ; scripts/helm-user-install.sh $(CURDIR)/bin
+bin/helm: ; scripts/install-helm install $(CURDIR)/bin
 docker-auth: ; gcloud auth configure-docker
 
 # targets for manually pusing images (kompose -c --build local will do this automatically)

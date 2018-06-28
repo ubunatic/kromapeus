@@ -36,13 +36,14 @@ scale()    { kubectl scale deployment --replicas $@; }
 log()      { echo "$@" 1>&2; }
 
 install_helm(){
-	$here/helm-user-install.sh
-	$here/allow-admin.sh yes
+	$here/install-helm install
+	$here/install-helm admin
 
 	helm init --upgrade
 	log -n "Waiting for tiller"
 	while true; do
-		helm list 2> /dev/null && break || log -n "."; sleep 1
+		helm list 2> /dev/null && break || log -n "."
+		sleep 1
 	done 
 }
 

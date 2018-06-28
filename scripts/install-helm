@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+
+prefix=./bin
+ask=false
+allow=false
+
+usage(){
+	cat 1>&2 <<-DOC
+	Usage 1:
+		$0 install [PREFIX]  # install helm into a prefix (default: $prefix)
+
+	Usage 2:
+	   $0 admin [yes|no]  # allow or disallow pods to adminster cluster
+	DOC
+}
+
+mkprefix(){
+	case $1 in
+		"")    ;;  # keep default prefix
+		*)     prefix="$1";;
+	esac
+	prefix=`readlink -f "$prefix"`
+	case $prefix in
+		"")    prefix=./bin;;
+		*/bin) prefix=$prefix;;
+		*)     prefix=$prefix/bin;;
+	esac
+	mkdir -p $prefix
+}
+
+mkhelm(){
+	mkprefix $1
+	local dir=`dirname $0`
+	curl -o $dir/get_helm.sh https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get
+	chmod +x $dir/get_helm.sh
+
+	echo installing to $prefix
+	# avoid sudo using EUID=0 (requires `sh`, since var is readonly in `bash`)
+	sh -c "PATH=$PATH:$prefix EUID=0 HELM_INSTALL_DIR=$prefix $dir/get_helm.sh"
+}
+
+allow_admin(){
+	case "$1" in
+		enable|allow|yes|true)          allow=true;;
+		disable|disallow|deny|no|false) allow=false;;
+		*)                              allow=false; ask=true;;
+	esac
+	if $ask; then
+		read -p "Allow pods to adminster cluster using default service account? (y|N)" key
+		case $key in
+			y|Y|yes) allow=true;;
+			*)       allow=false;;
+		esac
+	fi
+
+	if $allow
+	then kubectl create clusterrolebinding add-on-cluster-admin \
+		--clusterrole=cluster-admin --serviceaccount=kube-system:default &&
+		echo "OK admin-role setup" ||
+		echo "WARN ignoring kubectl create clusterrolebinding error"
+	else
+		echo "OK admin-role setup skipped"
+	fi
+}
+
+case $1 in
+	--help|-h) usage; exit 1;;
+	install|i|-i) shift; mkhelm $@;;
+	admin|a|-a)   shift; allow_admin $@;;
+	*)            mkhelm $@;;
+esac
